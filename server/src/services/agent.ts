@@ -39,6 +39,10 @@ export async function handleMessage(
     const started = await startConversation(userId);
     convo = (await repo.getConversation(started.conversationId))!;
   }
+  // Some stores (Mongo's Mixed type) don't round-trip an empty object/array, so
+  // these can come back undefined — normalize before use.
+  convo.collected = convo.collected ?? {};
+  convo.history = convo.history ?? [];
 
   convo.history.push({ role: 'user', text });
   const result = await advance(convo, text);

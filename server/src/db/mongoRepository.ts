@@ -30,8 +30,8 @@ export class MongoRepository implements Repository {
     await ConversationModel.replaceOne({ _id: c.id }, { _id: c.id, ...c }, { upsert: true });
   }
   async getConversation(id: string): Promise<Conversation | null> {
-    const doc = await ConversationModel.findById(id).lean<Conversation>().exec();
-    return doc ? strip(doc) : null;
+    const doc = await ConversationModel.findById(id).lean().exec();
+    return doc ? withId<Conversation>(doc) : null;
   }
 
   // ── Plans ────────────────────────────────────────────────────────────────────
@@ -39,13 +39,13 @@ export class MongoRepository implements Repository {
     await PlanModel.replaceOne({ _id: p.id }, { _id: p.id, ...p }, { upsert: true });
   }
   async getPlan(id: string): Promise<StudyPlan | null> {
-    const doc = await PlanModel.findById(id).lean<StudyPlan>().exec();
-    return doc ? strip(doc) : null;
+    const doc = await PlanModel.findById(id).lean().exec();
+    return doc ? withId<StudyPlan>(doc) : null;
   }
   async listPlans(userId?: string): Promise<StudyPlan[]> {
     const filter = userId ? { userId } : {};
-    const docs = await PlanModel.find(filter).sort({ createdAt: -1 }).lean<StudyPlan[]>().exec();
-    return docs.map(strip);
+    const docs = await PlanModel.find(filter).sort({ createdAt: -1 }).lean().exec();
+    return docs.map((d) => withId<StudyPlan>(d));
   }
   async deletePlan(id: string): Promise<void> {
     await PlanModel.deleteOne({ _id: id }).exec();
@@ -87,4 +87,14 @@ function strip<T>(doc: T & { _id?: unknown; __v?: unknown }): T {
   void _id;
   void __v;
   return rest as T;
+}
+
+/**
+ * Map a Mongo doc back to a domain object whose primary key lives in `id`:
+ * we store that key as `_id`, so rename it back (and drop `__v`).
+ */
+function withId<T>(doc: Record<string, unknown>): T {
+  const { _id, __v, ...rest } = doc;
+  void __v;
+  return { id: _id, ...rest } as T;
 }
