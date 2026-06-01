@@ -1,8 +1,8 @@
 import mongoose from 'mongoose';
 
 import { config } from '../config/env';
-import { ConversationModel, CourseModel, PlanModel, ProgressModel } from '../models';
-import type { Conversation, Course, Progress, StudyPlan } from '../types';
+import { ConversationModel, CourseModel, PlanModel, ProgressModel, UserModel } from '../models';
+import type { Conversation, Course, Progress, StudyPlan, User } from '../types';
 import type { Repository } from './repository';
 
 /** Mongo/Mongoose-backed repository, used when MONGODB_URI is a real value. */
@@ -10,6 +10,19 @@ export class MongoRepository implements Repository {
   async connect(): Promise<void> {
     mongoose.set('strictQuery', true);
     await mongoose.connect(config.mongodbUri);
+  }
+
+  // ── Users ────────────────────────────────────────────────────────────────────
+  async getUser(id: string): Promise<User | null> {
+    const doc = await UserModel.findById(id).lean<User & { _id: string }>().exec();
+    if (!doc) return null;
+    const { _id, ...rest } = doc as unknown as Record<string, unknown>;
+    void _id;
+    return { id, ...(rest as Omit<User, 'id'>) };
+  }
+  async saveUser(u: User): Promise<void> {
+    const { id, ...rest } = u;
+    await UserModel.replaceOne({ _id: id }, { _id: id, ...rest }, { upsert: true });
   }
 
   // ── Conversations ──────────────────────────────────────────────────────────

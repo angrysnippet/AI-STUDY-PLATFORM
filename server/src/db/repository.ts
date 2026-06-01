@@ -1,5 +1,5 @@
 import { config } from '../config/env';
-import type { Conversation, Course, Progress, StudyPlan } from '../types';
+import type { Conversation, Course, Progress, StudyPlan, User } from '../types';
 
 /**
  * Storage interface used by the rest of the app. Two implementations sit behind
@@ -8,6 +8,9 @@ import type { Conversation, Course, Progress, StudyPlan } from '../types';
  * `import { repo }` once and still pick up whichever backend is chosen at boot.
  */
 export interface Repository {
+  getUser(id: string): Promise<User | null>;
+  saveUser(u: User): Promise<void>;
+
   saveConversation(c: Conversation): Promise<void>;
   getConversation(id: string): Promise<Conversation | null>;
 
@@ -24,10 +27,19 @@ export interface Repository {
 }
 
 class InMemoryRepository implements Repository {
+  private users = new Map<string, User>();
   private conversations = new Map<string, Conversation>();
   private plans = new Map<string, StudyPlan>();
   private progress = new Map<string, Progress>(); // key: `${planId}:${userId}`
   private courses = new Map<string, Course>(); // key: youtubeUrl
+
+  async getUser(id: string): Promise<User | null> {
+    const u = this.users.get(id);
+    return u ? structuredClone(u) : null;
+  }
+  async saveUser(u: User): Promise<void> {
+    this.users.set(u.id, structuredClone(u));
+  }
 
   async saveConversation(c: Conversation): Promise<void> {
     this.conversations.set(c.id, structuredClone(c));
@@ -84,6 +96,8 @@ class RepositoryProxy implements Repository {
   use(b: Repository): void {
     this.backend = b;
   }
+  getUser = (id: string) => this.backend.getUser(id);
+  saveUser = (u: User) => this.backend.saveUser(u);
   saveConversation = (c: Conversation) => this.backend.saveConversation(c);
   getConversation = (id: string) => this.backend.getConversation(id);
   savePlan = (p: StudyPlan) => this.backend.savePlan(p);

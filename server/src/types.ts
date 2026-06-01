@@ -70,5 +70,22 @@ export interface Course {
   cachedAt: string;
 }
 
-/** Placeholder user until M3 wires real auth; every M2 record is scoped to this. */
+/** An application user (dev-login or Google). `id` scopes plans/progress/conversations. */
+export interface User {
+  id: string;
+  email: string;
+  name?: string;
+  picture?: string;
+  provider: 'dev' | 'google';
+  createdAt: string;
+}
+
+/** Identity attached to a request after JWT verification. */
+export interface AuthUser {
+  id: string;
+  email: string;
+  name?: string;
+}
+
+/** Fallback dev user (used by the dev-login stub when Google isn't configured). */
 export const DEV_USER_ID = 'dev-user';

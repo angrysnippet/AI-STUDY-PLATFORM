@@ -3,7 +3,9 @@ import express from 'express';
 
 import { config, logStubStatus } from './config/env';
 import { initRepository } from './db/repository';
+import { requireAuth } from './middleware/auth';
 import { agentRouter } from './routes/agent';
+import { authRouter } from './routes/auth';
 import { plansRouter } from './routes/plans';
 
 const app = express();
@@ -15,8 +17,9 @@ app.get('/api/health', (_req, res) => {
   res.json({ ok: true, stub: config.stub });
 });
 
-app.use('/api/agent', agentRouter);
-app.use('/api/plans', plansRouter);
+app.use('/api/auth', authRouter);
+app.use('/api/agent', requireAuth, agentRouter);
+app.use('/api/plans', requireAuth, plansRouter);
 
 async function main() {
   const backend = await initRepository();

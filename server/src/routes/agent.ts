@@ -1,13 +1,15 @@
 import { Router } from 'express';
 
-import { handleMessage, startConversation } from '../services/agent';
 import { repo } from '../db/repository';
+import { userId } from '../middleware/auth';
+import { handleMessage, startConversation } from '../services/agent';
 
+// Mounted behind requireAuth — req.user is always present.
 export const agentRouter = Router();
 
 // Start a fresh conversation (returns the greeting + a conversationId).
-agentRouter.post('/start', async (_req, res) => {
-  const reply = await startConversation();
+agentRouter.post('/start', async (req, res) => {
+  const reply = await startConversation(userId(req));
   res.json(reply);
 });
 
@@ -19,7 +21,7 @@ agentRouter.post('/message', async (req, res) => {
     return;
   }
   try {
-    const reply = await handleMessage(String(conversationId ?? ''), text);
+    const reply = await handleMessage(String(conversationId ?? ''), text, userId(req));
     res.json(reply);
   } catch (err) {
     console.error('[agent] error:', err);
@@ -27,10 +29,10 @@ agentRouter.post('/message', async (req, res) => {
   }
 });
 
-// Fetch a generated plan by id.
+// Fetch a generated plan by id (must belong to the current user).
 agentRouter.get('/plan/:id', async (req, res) => {
   const plan = await repo.getPlan(req.params.id);
-  if (!plan) {
+  if (!plan || plan.userId !== userId(req)) {
     res.status(404).json({ error: 'plan not found' });
     return;
   }

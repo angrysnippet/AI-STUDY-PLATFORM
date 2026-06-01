@@ -51,3 +51,16 @@ export interface AgentReply {
   phase: string;
   plan?: StudyPlan;
 }
+
+export interface User {
+  id: string;
+  email: string;
+  name?: string;
+  picture?: string;
+}
+
+export interface AuthConfig {
+  devLogin: boolean;
+  google: boolean;
+  googleClientId: string | null;
+}

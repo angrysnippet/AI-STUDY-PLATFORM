@@ -34,20 +34,29 @@ agent's questions, and it generates a study plan (deterministic stub until you a
 - **M2 (done):** persistence — Mongoose models (User/Course/StudyPlan/Progress/Conversation) behind a
   `Repository` interface; Mongo when `MONGODB_URI` is real, in-memory fallback otherwise. Plans are
   saved/listed/opened/deleted, and each plan tracks day-by-day completion with sequential unlocking.
-- **M3:** auth + multi-user (JWT + Google OAuth, dev-login stub).
+- **M3 (done):** auth + multi-user. JWT bearer tokens; `/api/agent` and `/api/plans` require auth and
+  are scoped to the signed-in user. **Dev login** works with no keys (optionally name a user to test
+  isolation); **Google sign-in** activates automatically once real Google credentials are set on the
+  server (the client reads availability from `GET /api/auth/config`).
 - **M4:** deploy (Vercel + Railway/Render + MongoDB Atlas).
 
-### API (M2)
+### API
 ```
-POST   /api/agent/start                 → { conversationId, reply, phase }
-POST   /api/agent/message               → { conversationId, reply, phase, plan? }
-GET    /api/plans                       → PlanSummary[]            (current user's plans)
-GET    /api/plans/:id                   → StudyPlan
-DELETE /api/plans/:id                   → { ok }
-GET    /api/plans/:id/progress          → { completedDays, ... }
-POST   /api/plans/:id/progress {day,done} → updated progress (409 if earlier days unfinished)
+GET    /api/auth/config                 → { devLogin, google, googleClientId }
+POST   /api/auth/dev-login   {name?}    → { token, user }          (always available)
+POST   /api/auth/google      {credential} → { token, user }        (real Google creds only)
+GET    /api/auth/me                      → { user }                 [auth]
+
+POST   /api/agent/start                  → { conversationId, reply, phase }   [auth]
+POST   /api/agent/message                → { conversationId, reply, phase, plan? }  [auth]
+GET    /api/plans                        → PlanSummary[]            [auth, this user only]
+GET    /api/plans/:id                    → StudyPlan                [auth]
+DELETE /api/plans/:id                    → { ok }                   [auth]
+GET    /api/plans/:id/progress           → { completedDays, ... }   [auth]
+POST   /api/plans/:id/progress {day,done} → updated progress (409 if earlier days unfinished)  [auth]
 ```
-Until M3, every request is scoped to a single `dev-user`.
+`[auth]` = requires `Authorization: Bearer <jwt>`. The client stores the token in `localStorage`
+and attaches it automatically; a 401 drops the user back to the login screen.
 
 ## Setup real services (do this after the app works in stub mode)
 Each integration stays stubbed until its env var in `server/.env` is set to a real value.

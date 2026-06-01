@@ -1,19 +1,15 @@
 import { Router } from 'express';
 
 import { repo } from '../db/repository';
-import { DEV_USER_ID } from '../types';
+import { userId } from '../middleware/auth';
 import type { Progress } from '../types';
 
+// Mounted behind requireAuth, so req.user is always present here.
 export const plansRouter = Router();
 
-// Until M3 wires real auth, every request is the dev user.
-function currentUser(): string {
-  return DEV_USER_ID;
-}
-
 // List the current user's saved plans (newest first), trimmed for a list view.
-plansRouter.get('/', async (_req, res) => {
-  const plans = await repo.listPlans(currentUser());
+plansRouter.get('/', async (req, res) => {
+  const plans = await repo.listPlans(userId(req));
   res.json(
     plans.map((p) => ({
       id: p.id,
@@ -29,7 +25,7 @@ plansRouter.get('/', async (_req, res) => {
 // Fetch one full plan (must belong to the current user).
 plansRouter.get('/:id', async (req, res) => {
   const plan = await repo.getPlan(req.params.id);
-  if (!plan || plan.userId !== currentUser()) {
+  if (!plan || plan.userId !== userId(req)) {
     res.status(404).json({ error: 'plan not found' });
     return;
   }
@@ -39,7 +35,7 @@ plansRouter.get('/:id', async (req, res) => {
 // Delete a plan (and its progress).
 plansRouter.delete('/:id', async (req, res) => {
   const plan = await repo.getPlan(req.params.id);
-  if (!plan || plan.userId !== currentUser()) {
+  if (!plan || plan.userId !== userId(req)) {
     res.status(404).json({ error: 'plan not found' });
     return;
   }
@@ -49,22 +45,22 @@ plansRouter.delete('/:id', async (req, res) => {
 
 // Current completion state for a plan.
 plansRouter.get('/:id/progress', async (req, res) => {
-  const userId = currentUser();
+  const uid = userId(req);
   const plan = await repo.getPlan(req.params.id);
-  if (!plan || plan.userId !== userId) {
+  if (!plan || plan.userId !== uid) {
     res.status(404).json({ error: 'plan not found' });
     return;
   }
-  const progress = (await repo.getProgress(plan.id, userId)) ?? emptyProgress(plan.id, userId);
+  const progress = (await repo.getProgress(plan.id, uid)) ?? emptyProgress(plan.id, uid);
   res.json(progress);
 });
 
 // Toggle a day's completion. Days unlock sequentially: you can only complete
 // day N once days 1..N-1 are done, and un-completing a day clears all later days.
 plansRouter.post('/:id/progress', async (req, res) => {
-  const userId = currentUser();
+  const uid = userId(req);
   const plan = await repo.getPlan(req.params.id);
-  if (!plan || plan.userId !== userId) {
+  if (!plan || plan.userId !== uid) {
     res.status(404).json({ error: 'plan not found' });
     return;
   }
@@ -77,7 +73,7 @@ plansRouter.post('/:id/progress', async (req, res) => {
     return;
   }
 
-  const progress = (await repo.getProgress(plan.id, userId)) ?? emptyProgress(plan.id, userId);
+  const progress = (await repo.getProgress(plan.id, uid)) ?? emptyProgress(plan.id, uid);
   const completed = new Set(progress.completedDays);
   const ordered = [...dayNumbers].sort((a, b) => a - b);
 
@@ -95,7 +91,7 @@ plansRouter.post('/:id/progress', async (req, res) => {
 
   const updated: Progress = {
     planId: plan.id,
-    userId,
+    userId: uid,
     completedDays: ordered.filter((d) => completed.has(d)),
     updatedAt: new Date().toISOString(),
   };

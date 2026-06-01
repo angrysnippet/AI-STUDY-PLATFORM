@@ -34,7 +34,8 @@ export async function handleMessage(
   userId: string = DEV_USER_ID,
 ): Promise<AgentReply> {
   let convo = await repo.getConversation(conversationId);
-  if (!convo) {
+  // Unknown id, or one owned by a different user → start a fresh conversation.
+  if (!convo || convo.userId !== userId) {
     const started = await startConversation(userId);
     convo = (await repo.getConversation(started.conversationId))!;
   }

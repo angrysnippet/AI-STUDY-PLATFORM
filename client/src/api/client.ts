@@ -1,8 +1,34 @@
-import type { AgentReply, PlanSummary, Progress, StudyPlan } from '../types';
+import type { AgentReply, AuthConfig, PlanSummary, Progress, StudyPlan, User } from '../types';
 
 const BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:4000';
+const TOKEN_KEY = 'asp_token';
 
-async function json<T>(res: Response): Promise<T> {
+// ── Token storage ─────────────────────────────────────────────────────────────
+export function getToken(): string | null {
+  return localStorage.getItem(TOKEN_KEY);
+}
+export function setToken(token: string): void {
+  localStorage.setItem(TOKEN_KEY, token);
+}
+export function clearToken(): void {
+  localStorage.removeItem(TOKEN_KEY);
+}
+
+/** Fired when the server rejects our token (401) so the app can drop to login. */
+export const onUnauthorized = new EventTarget();
+
+async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const token = getToken();
+  const headers = new Headers(init.headers);
+  if (init.body) headers.set('Content-Type', 'application/json');
+  if (token) headers.set('Authorization', `Bearer ${token}`);
+
+  const res = await fetch(`${BASE}${path}`, { ...init, headers });
+  if (res.status === 401) {
+    clearToken();
+    onUnauthorized.dispatchEvent(new Event('unauthorized'));
+    throw new Error('Session expired — please sign in again.');
+  }
   if (!res.ok) {
     const body = (await res.json().catch(() => ({}))) as { error?: string };
     throw new Error(body.error ?? `request failed (${res.status})`);
@@ -10,44 +36,62 @@ async function json<T>(res: Response): Promise<T> {
   return res.json() as Promise<T>;
 }
 
-export async function startConversation(): Promise<AgentReply> {
-  const res = await fetch(`${BASE}/api/agent/start`, { method: 'POST' });
-  if (!res.ok) throw new Error('could not start conversation');
-  return res.json();
+// ── Auth ───────────────────────────────────────────────────────────────────────
+export function getAuthConfig(): Promise<AuthConfig> {
+  return request<AuthConfig>('/api/auth/config');
 }
 
-export async function sendMessage(conversationId: string, text: string): Promise<AgentReply> {
-  const res = await fetch(`${BASE}/api/agent/message`, {
+export async function devLogin(name?: string): Promise<User> {
+  const { token, user } = await request<{ token: string; user: User }>('/api/auth/dev-login', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name }),
+  });
+  setToken(token);
+  return user;
+}
+
+export async function googleLogin(credential: string): Promise<User> {
+  const { token, user } = await request<{ token: string; user: User }>('/api/auth/google', {
+    method: 'POST',
+    body: JSON.stringify({ credential }),
+  });
+  setToken(token);
+  return user;
+}
+
+export async function getMe(): Promise<User> {
+  const { user } = await request<{ user: User }>('/api/auth/me');
+  return user;
+}
+
+// ── Agent ────────────────────────────────────────────────────────────────────
+export function startConversation(): Promise<AgentReply> {
+  return request<AgentReply>('/api/agent/start', { method: 'POST' });
+}
+
+export function sendMessage(conversationId: string, text: string): Promise<AgentReply> {
+  return request<AgentReply>('/api/agent/message', {
+    method: 'POST',
     body: JSON.stringify({ conversationId, text }),
   });
-  return json<AgentReply>(res);
 }
 
-// ── Saved plans + progress (M2) ───────────────────────────────────────────────
-
-export async function listPlans(): Promise<PlanSummary[]> {
-  return json<PlanSummary[]>(await fetch(`${BASE}/api/plans`));
+// ── Saved plans + progress ─────────────────────────────────────────────────────
+export function listPlans(): Promise<PlanSummary[]> {
+  return request<PlanSummary[]>('/api/plans');
 }
-
-export async function getPlan(id: string): Promise<StudyPlan> {
-  return json<StudyPlan>(await fetch(`${BASE}/api/plans/${id}`));
+export function getPlan(id: string): Promise<StudyPlan> {
+  return request<StudyPlan>(`/api/plans/${id}`);
 }
-
 export async function deletePlan(id: string): Promise<void> {
-  await json<{ ok: boolean }>(await fetch(`${BASE}/api/plans/${id}`, { method: 'DELETE' }));
+  await request<{ ok: boolean }>(`/api/plans/${id}`, { method: 'DELETE' });
 }
-
-export async function getProgress(planId: string): Promise<Progress> {
-  return json<Progress>(await fetch(`${BASE}/api/plans/${planId}/progress`));
+export function getProgress(planId: string): Promise<Progress> {
+  return request<Progress>(`/api/plans/${planId}/progress`);
 }
-
-export async function setDayDone(planId: string, day: number, done: boolean): Promise<Progress> {
-  const res = await fetch(`${BASE}/api/plans/${planId}/progress`, {
+export function setDayDone(planId: string, day: number, done: boolean): Promise<Progress> {
+  return request<Progress>(`/api/plans/${planId}/progress`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ day, done }),
   });
-  return json<Progress>(res);
 }

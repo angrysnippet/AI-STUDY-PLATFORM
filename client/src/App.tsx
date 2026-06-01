@@ -1,18 +1,28 @@
 import { useEffect, useRef, useState } from 'react';
 
 import {
+  clearToken,
   deletePlan,
+  getAuthConfig,
+  getMe,
   getPlan,
   getProgress,
+  getToken,
   listPlans,
+  onUnauthorized,
   sendMessage,
   setDayDone,
   startConversation,
 } from './api/client';
+import { Login } from './components/Login';
 import { PlanView } from './components/PlanView';
-import type { ChatMessage, PlanSummary, StudyPlan } from './types';
+import type { AuthConfig, ChatMessage, PlanSummary, StudyPlan, User } from './types';
 
 export default function App() {
+  const [authConfig, setAuthConfig] = useState<AuthConfig | null>(null);
+  const [authChecked, setAuthChecked] = useState(false);
+  const [user, setUser] = useState<User | null>(null);
+
   const [conversationId, setConversationId] = useState('');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [plan, setPlan] = useState<StudyPlan | null>(null);
@@ -24,7 +34,29 @@ export default function App() {
   const [busy, setBusy] = useState(false);
   const listRef = useRef<HTMLDivElement>(null);
 
+  // Boot: load auth config + restore any existing session.
   useEffect(() => {
+    getAuthConfig()
+      .then(setAuthConfig)
+      .catch(() => setAuthConfig({ devLogin: true, google: false, googleClientId: null }));
+
+    if (getToken()) {
+      getMe()
+        .then(setUser)
+        .catch(() => clearToken())
+        .finally(() => setAuthChecked(true));
+    } else {
+      setAuthChecked(true);
+    }
+
+    const drop = () => resetToLoggedOut();
+    onUnauthorized.addEventListener('unauthorized', drop);
+    return () => onUnauthorized.removeEventListener('unauthorized', drop);
+  }, []);
+
+  // Once logged in, start a conversation and load saved plans.
+  useEffect(() => {
+    if (!user) return;
     startConversation()
       .then((r) => {
         setConversationId(r.conversationId);
@@ -36,7 +68,7 @@ export default function App() {
         ]);
       });
     refreshPlans();
-  }, []);
+  }, [user]);
 
   useEffect(() => {
     listRef.current?.scrollTo(0, listRef.current.scrollHeight);
@@ -46,6 +78,21 @@ export default function App() {
     listPlans()
       .then(setSavedPlans)
       .catch(() => {});
+  }
+
+  function resetToLoggedOut() {
+    setUser(null);
+    setConversationId('');
+    setMessages([]);
+    setPlan(null);
+    setCompletedDays([]);
+    setSavedPlans([]);
+    setNotice('');
+  }
+
+  function logout() {
+    clearToken();
+    resetToLoggedOut();
   }
 
   async function submit(e: React.FormEvent) {
@@ -110,11 +157,24 @@ export default function App() {
     }
   }
 
+  if (!authChecked) {
+    return <div className="booting">Loading…</div>;
+  }
+  if (!user) {
+    return <Login authConfig={authConfig} onLogin={setUser} />;
+  }
+
   return (
     <div className="app">
       <header className="topbar">
         <span className="logo">AI Study Platform</span>
-        <span className="sub">Milestone 2 · saved plans + progress</span>
+        <span className="sub">Milestone 3 · multi-user</span>
+        <div className="topbar-right">
+          <span className="who">{user.name ?? user.email}</span>
+          <button className="logout" onClick={logout}>
+            Sign out
+          </button>
+        </div>
       </header>
       <div className="panes">
         <section className="chat">

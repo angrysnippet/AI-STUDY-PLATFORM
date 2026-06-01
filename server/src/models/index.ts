@@ -19,7 +19,8 @@ const userSchema = new Schema({
   email: { type: String, required: true, index: true },
   name: String,
   picture: String,
-  createdAt: { type: Date, default: Date.now },
+  provider: { type: String, enum: ['dev', 'google'], default: 'dev' },
+  createdAt: String,
 });
 export const UserModel = model('User', userSchema);
 
