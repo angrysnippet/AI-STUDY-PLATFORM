@@ -1,0 +1,25 @@
+services:
+  - type: web
+    runtime: docker
+    name: ai-study-platform-api
+    rootDir: server
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DEV_LOGIN_ENABLED
+        value: "false"
+      - key: CLIENT_URL
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: ANTHROPIC_MODEL
+        value: claude-opus-4-8
+      - key: MONGODB_URI
+        sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: YOUTUBE_API_KEY
+        sync: false

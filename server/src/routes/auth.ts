@@ -10,7 +10,7 @@ export const authRouter = Router();
 // uses this to show/hide the Google button (it's only real once creds exist).
 authRouter.get('/config', (_req, res) => {
   res.json({
-    devLogin: true,
+    devLogin: config.devLoginEnabled,
     google: !config.stub.google,
     googleClientId: config.stub.google ? null : config.googleClientId,
   });
@@ -18,6 +18,10 @@ authRouter.get('/config', (_req, res) => {
 
 // Dev login — zero-key path. Optional { name } creates a distinct local user.
 authRouter.post('/dev-login', async (req, res) => {
+  if (!config.devLoginEnabled) {
+    res.status(404).json({ error: 'Dev login is disabled.' });
+    return;
+  }
   const name = typeof req.body?.name === 'string' ? req.body.name : undefined;
   const { token, user } = await devLogin(name);
   res.json({ token, user: publicUser(user) });

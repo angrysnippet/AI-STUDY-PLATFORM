@@ -68,16 +68,18 @@ export function Login({ authConfig, onLogin }: Props) {
 
         {authConfig?.google && <div ref={googleBtn} className="google-btn" />}
 
-        <form className="dev-login" onSubmit={handleDevLogin}>
-          <label>Continue without an account (dev login)</label>
-          <input
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="Your name (optional)"
-            disabled={busy}
-          />
-          <button disabled={busy}>{busy ? 'Signing in…' : 'Continue'}</button>
-        </form>
+        {authConfig?.devLogin && (
+          <form className="dev-login" onSubmit={handleDevLogin}>
+            <label>Continue without an account (dev login)</label>
+            <input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Your name (optional)"
+              disabled={busy}
+            />
+            <button disabled={busy}>{busy ? 'Signing in…' : 'Continue'}</button>
+          </form>
+        )}
 
         {!authConfig?.google && (
           <p className="hint">Google sign-in appears here once it's configured on the server.</p>

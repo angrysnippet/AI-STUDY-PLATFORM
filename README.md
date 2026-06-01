@@ -38,7 +38,8 @@ agent's questions, and it generates a study plan (deterministic stub until you a
   are scoped to the signed-in user. **Dev login** works with no keys (optionally name a user to test
   isolation); **Google sign-in** activates automatically once real Google credentials are set on the
   server (the client reads availability from `GET /api/auth/config`).
-- **M4:** deploy (Vercel + Railway/Render + MongoDB Atlas).
+- **M4 (done):** deploy configs for Vercel + Railway/Render + MongoDB Atlas, plus
+  the real-credential walkthrough in [`DEPLOYMENT.md`](./DEPLOYMENT.md).
 
 ### API
 ```
@@ -58,7 +59,7 @@ POST   /api/plans/:id/progress {day,done} → updated progress (409 if earlier d
 `[auth]` = requires `Authorization: Bearer <jwt>`. The client stores the token in `localStorage`
 and attaches it automatically; a 401 drops the user back to the login screen.
 
-## Setup real services (do this after the app works in stub mode)
-Each integration stays stubbed until its env var in `server/.env` is set to a real value.
-Step-by-step setup guide for each (Anthropic key, MongoDB Atlas, Google OAuth, YouTube Data API)
-will be added here as the milestones land.
+## Deploy and swap in real credentials
+Follow [`DEPLOYMENT.md`](./DEPLOYMENT.md). It covers Atlas, Anthropic, Google
+Identity Services, YouTube Data API v3, Railway, Render, Vercel, local key
+replacement, and the final smoke test.
