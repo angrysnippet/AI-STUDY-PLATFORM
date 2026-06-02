@@ -32,9 +32,9 @@ export default function App() {
   const [notice, setNotice] = useState('');
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
+  const [mobileTab, setMobileTab] = useState<'chat' | 'plan'>('chat');
   const listRef = useRef<HTMLDivElement>(null);
 
-  // Boot: load auth config + restore any existing session.
   useEffect(() => {
     getAuthConfig()
       .then(setAuthConfig)
@@ -54,7 +54,6 @@ export default function App() {
     return () => onUnauthorized.removeEventListener('unauthorized', drop);
   }, []);
 
-  // Once logged in, start a conversation and load saved plans.
   useEffect(() => {
     if (!user) return;
     startConversation()
@@ -62,11 +61,11 @@ export default function App() {
         setConversationId(r.conversationId);
         setMessages([{ role: 'assistant', text: r.reply }]);
       })
-      .catch(() => {
+      .catch(() =>
         setMessages([
           { role: 'assistant', text: 'Could not reach the server — is it running on port 4000?' },
-        ]);
-      });
+        ]),
+      );
     refreshPlans();
   }, [user]);
 
@@ -95,21 +94,21 @@ export default function App() {
     resetToLoggedOut();
   }
 
-  async function submit(e: React.FormEvent) {
-    e.preventDefault();
-    const text = input.trim();
-    if (!text || busy) return;
+  async function send(text: string) {
+    const trimmed = text.trim();
+    if (!trimmed || busy) return;
     setInput('');
-    setMessages((m) => [...m, { role: 'user', text }]);
+    setMessages((m) => [...m, { role: 'user', text: trimmed }]);
     setBusy(true);
     try {
-      const r = await sendMessage(conversationId, text);
+      const r = await sendMessage(conversationId, trimmed);
       if (r.conversationId) setConversationId(r.conversationId);
       setMessages((m) => [...m, { role: 'assistant', text: r.reply }]);
       if (r.plan) {
         setPlan(r.plan);
         setCompletedDays([]);
         setNotice('');
+        setMobileTab('plan');
         refreshPlans();
       }
     } catch (err) {
@@ -125,6 +124,7 @@ export default function App() {
       setPlan(p);
       setCompletedDays(prog.completedDays);
       setNotice('');
+      setMobileTab('plan');
     } catch (err) {
       setNotice((err as Error).message);
     }
@@ -157,26 +157,39 @@ export default function App() {
     }
   }
 
-  if (!authChecked) {
-    return <div className="booting">Loading…</div>;
-  }
-  if (!user) {
-    return <Login authConfig={authConfig} onLogin={setUser} />;
-  }
+  if (!authChecked) return <div className="booting">Loading…</div>;
+  if (!user) return <Login authConfig={authConfig} onLogin={setUser} />;
+
+  const lastAssistant = [...messages].reverse().find((m) => m.role === 'assistant');
+  const suggestions = busy ? [] : suggestionsFor(lastAssistant?.text ?? '');
 
   return (
     <div className="app">
       <header className="topbar">
-        <span className="logo">AI Study Platform</span>
-        <span className="sub">Milestone 3 · multi-user</span>
+        <div className="brand">
+          <span className="brand-mark">◆</span> AI Study Platform
+        </div>
         <div className="topbar-right">
-          <span className="who">{user.name ?? user.email}</span>
+          <span className="who">
+            <span className="avatar">{(user.name ?? user.email ?? '?').charAt(0).toUpperCase()}</span>
+            {user.name ?? user.email}
+          </span>
           <button className="logout" onClick={logout}>
             Sign out
           </button>
         </div>
       </header>
-      <div className="panes">
+
+      <div className="mobile-tabs">
+        <button className={mobileTab === 'chat' ? 'active' : ''} onClick={() => setMobileTab('chat')}>
+          Chat
+        </button>
+        <button className={mobileTab === 'plan' ? 'active' : ''} onClick={() => setMobileTab('plan')}>
+          Plan{plan ? '' : ' (none yet)'}
+        </button>
+      </div>
+
+      <div className="panes" data-active={mobileTab}>
         <section className="chat">
           <div className="messages" ref={listRef}>
             {messages.map((m, i) => (
@@ -184,9 +197,32 @@ export default function App() {
                 {m.text}
               </div>
             ))}
-            {busy && <div className="msg assistant typing">…</div>}
+            {busy && (
+              <div className="msg assistant typing">
+                <span />
+                <span />
+                <span />
+              </div>
+            )}
           </div>
-          <form className="composer" onSubmit={submit}>
+
+          {suggestions.length > 0 && (
+            <div className="suggestions">
+              {suggestions.map((s) => (
+                <button key={s} className="suggestion" onClick={() => send(s)}>
+                  {s}
+                </button>
+              ))}
+            </div>
+          )}
+
+          <form
+            className="composer"
+            onSubmit={(e) => {
+              e.preventDefault();
+              send(input);
+            }}
+          >
             <input
               value={input}
               onChange={(e) => setInput(e.target.value)}
@@ -228,17 +264,25 @@ export default function App() {
           {notice && <div className="notice">{notice}</div>}
 
           {plan ? (
-            <PlanView
-              plan={plan}
-              completedDays={completedDays}
-              onToggleDay={toggleDay}
-              busyDay={busyDay}
-            />
+            <PlanView plan={plan} completedDays={completedDays} onToggleDay={toggleDay} busyDay={busyDay} />
           ) : (
-            <div className="empty">Your generated study plan will appear here.</div>
+            <div className="empty">
+              <span className="empty-icon">📚</span>
+              Your generated study plan will appear here.
+            </div>
           )}
         </section>
       </div>
     </div>
   );
+}
+
+/** Quick-reply chips inferred from the agent's current question. */
+function suggestionsFor(text: string): string[] {
+  const t = text.toLowerCase();
+  if (/beginner|intermediate|advanced/.test(t)) return ['Beginner', 'Intermediate', 'Advanced'];
+  if (/minutes|per day/.test(t)) return ['20', '30', '45', '60'];
+  if (/projects|practice/.test(t)) return ['Yes', 'No'];
+  if (/deadline/.test(t)) return ['No deadline', '2 weeks', '1 month'];
+  return [];
 }
