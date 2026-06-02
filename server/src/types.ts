@@ -22,6 +22,7 @@ export interface CourseVideo {
   position: number;
   title: string;
   seconds: number;
+  videoId: string;
 }
 
 export type FeasibilityGrade = 'FEASIBLE' | 'TIGHT' | 'TOO_LONG';
