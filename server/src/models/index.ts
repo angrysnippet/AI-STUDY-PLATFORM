@@ -69,5 +69,6 @@ const conversationSchema = new Schema({
   collected: { type: Schema.Types.Mixed, default: {} },
   history: { type: Schema.Types.Mixed, default: [] },
   planId: String,
+  course: { type: Schema.Types.Mixed, default: null },
 });
 export const ConversationModel = model('Conversation', conversationSchema);

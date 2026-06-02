@@ -70,6 +70,8 @@ export interface Conversation {
   collected: CollectedInputs;
   history: ChatMessage[];
   planId?: string;
+  /** The playlist analyzed at intake, used to tailor follow-up questions. */
+  course?: { title: string; videoCount: number; totalMinutes: number };
 }
 
 /** Per-user, per-plan completion tracking (which day numbers are done). */

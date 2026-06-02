@@ -57,6 +57,7 @@ export interface AgentReply {
   reply: string;
   phase: string;
   plan?: StudyPlan;
+  suggestions?: string[];
 }
 
 export interface User {

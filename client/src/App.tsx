@@ -32,6 +32,7 @@ export default function App() {
   const [notice, setNotice] = useState('');
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
+  const [suggestions, setSuggestions] = useState<string[]>([]);
   const [mobileTab, setMobileTab] = useState<'chat' | 'plan'>('chat');
   const listRef = useRef<HTMLDivElement>(null);
 
@@ -98,12 +99,14 @@ export default function App() {
     const trimmed = text.trim();
     if (!trimmed || busy) return;
     setInput('');
+    setSuggestions([]);
     setMessages((m) => [...m, { role: 'user', text: trimmed }]);
     setBusy(true);
     try {
       const r = await sendMessage(conversationId, trimmed);
       if (r.conversationId) setConversationId(r.conversationId);
       setMessages((m) => [...m, { role: 'assistant', text: r.reply }]);
+      setSuggestions(r.suggestions ?? []);
       if (r.plan) {
         setPlan(r.plan);
         setCompletedDays([]);
@@ -160,9 +163,6 @@ export default function App() {
   if (!authChecked) return <div className="booting">Loading…</div>;
   if (!user) return <Login authConfig={authConfig} onLogin={setUser} />;
 
-  const lastAssistant = [...messages].reverse().find((m) => m.role === 'assistant');
-  const suggestions = busy ? [] : suggestionsFor(lastAssistant?.text ?? '');
-
   return (
     <div className="app">
       <header className="topbar">
@@ -206,7 +206,7 @@ export default function App() {
             )}
           </div>
 
-          {suggestions.length > 0 && (
+          {!busy && suggestions.length > 0 && (
             <div className="suggestions">
               {suggestions.map((s) => (
                 <button key={s} className="suggestion" onClick={() => send(s)}>
@@ -275,14 +275,4 @@ export default function App() {
       </div>
     </div>
   );
-}
-
-/** Quick-reply chips inferred from the agent's current question. */
-function suggestionsFor(text: string): string[] {
-  const t = text.toLowerCase();
-  if (/beginner|intermediate|advanced/.test(t)) return ['Beginner', 'Intermediate', 'Advanced'];
-  if (/minutes|per day/.test(t)) return ['20', '30', '45', '60'];
-  if (/projects|practice/.test(t)) return ['Yes', 'No'];
-  if (/deadline/.test(t)) return ['No deadline', '2 weeks', '1 month'];
-  return [];
 }

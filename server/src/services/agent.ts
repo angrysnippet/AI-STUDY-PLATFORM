@@ -14,6 +14,14 @@ export interface AgentReply {
   reply: string;
   phase: Conversation['phase'];
   plan?: StudyPlan;
+  /** Tappable quick-reply options for the current question (server-computed). */
+  suggestions?: string[];
+}
+
+interface Step {
+  text: string;
+  plan?: StudyPlan;
+  suggestions?: string[];
 }
 
 export async function startConversation(userId: string = DEV_USER_ID): Promise<AgentReply> {
@@ -49,10 +57,16 @@ export async function handleMessage(
   convo.history.push({ role: 'assistant', text: result.text });
   await repo.saveConversation(convo);
 
-  return { conversationId: convo.id, reply: result.text, phase: convo.phase, plan: result.plan };
+  return {
+    conversationId: convo.id,
+    reply: result.text,
+    phase: convo.phase,
+    plan: result.plan,
+    suggestions: result.suggestions,
+  };
 }
 
-async function advance(convo: Conversation, text: string): Promise<{ text: string; plan?: StudyPlan }> {
+async function advance(convo: Conversation, text: string): Promise<Step> {
   switch (convo.phase) {
     case 'intake': {
       // Need a real YouTube playlist link before we can do anything.
@@ -74,45 +88,73 @@ async function advance(convo: Conversation, text: string): Promise<{ text: strin
       }
       convo.collected.youtubeUrl = url;
       convo.collected.goals = text.replace(url, '').trim() || 'general mastery of the material';
+
+      // Analyze the playlist NOW so the follow-up questions are tailored to it.
+      const meta = await getCourseMeta(url);
+      convo.course = { title: meta.title, videoCount: meta.videoCount, totalMinutes: meta.totalMinutes };
       convo.phase = 'questions';
       return {
-        text: 'Great. A few quick questions:\n\n1) Are you a beginner, intermediate, or advanced with this topic?',
+        text:
+          `Nice — I went through **${meta.title}**: **${meta.videoCount} videos**, about ` +
+          `**${humanizeHours(meta.totalMinutes)}** of content.\n\n` +
+          `To shape your plan: how would you rate your experience with this topic?`,
+        suggestions: LEVEL_OPTIONS,
       };
     }
 
     case 'questions': {
+      const course = convo.course;
       // Each answer is validated; on invalid input we hint and re-ask the SAME
       // question (the field stays unset, so we re-enter this branch next turn).
       if (convo.collected.level === undefined) {
         const r = validateLevel(text);
         if (!r.ok) {
-          return { text: "I didn't catch that — are you a **beginner**, **intermediate**, or **advanced** with this topic?" };
+          return {
+            text: "I didn't quite catch that — how would you rate your experience with this topic?",
+            suggestions: LEVEL_OPTIONS,
+          };
         }
         convo.collected.level = r.value;
-        return { text: '2) Roughly how many minutes can you study per day?' };
+        return {
+          text: 'How much time can you realistically give this each day?',
+          suggestions: timeOptions(course),
+        };
       }
       if (convo.collected.minutesPerDay === undefined) {
         const r = validateMinutes(text);
         if (!r.ok) {
-          return { text: 'Please give me a number of **minutes per day** — e.g. "30", "45", or "1 hour".' };
+          return {
+            text: 'How much time can you give this each day? Pick one, or tell me in your own words.',
+            suggestions: timeOptions(course),
+          };
         }
         convo.collected.minutesPerDay = r.value;
-        return { text: '3) Do you want hands-on projects/practice included? (yes/no)' };
+        return {
+          text: 'Do you want hands-on projects and practice built in, or a watch-and-learn plan?',
+          suggestions: PROJECT_OPTIONS,
+        };
       }
       if (convo.collected.includeProjects === undefined) {
         const r = validateYesNo(text);
         if (!r.ok) {
-          return { text: 'Just **yes** or **no** — should I include hands-on projects/practice?' };
+          return {
+            text: 'Would you like hands-on projects and practice included, or just the videos?',
+            suggestions: PROJECT_OPTIONS,
+          };
         }
         convo.collected.includeProjects = r.value;
         return {
-          text: '4) Any target deadline? e.g. "in 3 weeks" or "30 days" — or say "no" for no deadline.',
+          text: 'Last thing — do you have a target finish date in mind?',
+          suggestions: deadlineOptions(course, convo.collected.minutesPerDay),
         };
       }
       // Final question: deadline (optional, but the answer must be understandable).
       const r = validateDeadline(text);
       if (!r.ok) {
-        return { text: 'Tell me a target like "in 3 weeks" or "30 days", or say "no" if there\'s no deadline.' };
+        return {
+          text: "I didn't get that — when would you like to finish? Pick one, or say there's no deadline.",
+          suggestions: deadlineOptions(course, convo.collected.minutesPerDay),
+        };
       }
       convo.collected.deadlineDays = r.value;
       convo.phase = 'generate';
@@ -138,6 +180,57 @@ async function advance(convo: Conversation, text: string): Promise<{ text: strin
     default:
       return { text: 'Your plan is ready. Start a new chat to plan another course.' };
   }
+}
+
+// ── Question options (suggestions), tailored to the analyzed playlist ───────────
+const LEVEL_OPTIONS = ['Beginner', 'Intermediate', 'Advanced'];
+const PROJECT_OPTIONS = ['Yes, include projects', 'No, just the videos'];
+
+type CourseInfo = { totalMinutes: number } | undefined;
+
+function humanizeHours(totalMinutes: number): string {
+  if (totalMinutes < 60) return `${Math.max(1, Math.round(totalMinutes))} minutes`;
+  const hours = totalMinutes / 60;
+  return hours < 10 ? `${hours.toFixed(1)} hours` : `${Math.round(hours)} hours`;
+}
+
+/** Rough, planner-consistent estimate: ~70% of the daily budget is watching. */
+function estimateDays(totalMinutes: number, dailyMinutes: number): number {
+  const watchPerDay = Math.max(5, dailyMinutes * 0.7);
+  return Math.max(1, Math.ceil(totalMinutes / watchPerDay));
+}
+
+function humanizeSpan(days: number): string {
+  if (days <= 13) return `~${days} days`;
+  const weeks = Math.round(days / 7);
+  if (weeks <= 10) return `~${weeks} wks`;
+  return `~${Math.round(days / 30)} mo`;
+}
+
+function labelTime(min: number): string {
+  if (min % 60 === 0) return `${min / 60} hr`;
+  if (min > 60) return `${Math.floor(min / 60)}h ${min % 60}m`;
+  return `${min} min`;
+}
+
+/** Daily-time options scaled to course length, annotated with how long they'd take. */
+function timeOptions(course: CourseInfo): string[] {
+  if (!course) return ['30 min', '45 min', '1 hr'];
+  const t = course.totalMinutes;
+  const mins = t > 1500 ? [45, 90, 120] : t > 600 ? [30, 60, 90] : [20, 40, 60];
+  return mins.map((m) => `${labelTime(m)}/day (${humanizeSpan(estimateDays(t, m))})`);
+}
+
+/** Deadline options derived from the course length + the user's chosen daily time. */
+function deadlineOptions(course: CourseInfo, dailyMinutes?: number): string[] {
+  const opts = ['No deadline'];
+  if (!course || !dailyMinutes) return opts;
+  const natural = estimateDays(course.totalMinutes, dailyMinutes);
+  const comfWeeks = Math.max(1, Math.round(natural / 7));
+  const pushWeeks = Math.max(1, Math.round((natural * 0.7) / 7));
+  opts.push(`In ${comfWeeks} weeks`);
+  if (pushWeeks < comfWeeks) opts.push(`In ${pushWeeks} weeks`);
+  return opts;
 }
 
 type Valid<T> = { ok: true; value: T } | { ok: false };
