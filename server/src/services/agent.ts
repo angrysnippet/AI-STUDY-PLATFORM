@@ -55,29 +55,66 @@ export async function handleMessage(
 async function advance(convo: Conversation, text: string): Promise<{ text: string; plan?: StudyPlan }> {
   switch (convo.phase) {
     case 'intake': {
-      convo.collected.youtubeUrl = extractUrl(text) ?? convo.collected.youtubeUrl;
-      convo.collected.goals = text.trim();
+      // Need a real YouTube playlist link before we can do anything.
+      const url = extractUrl(text);
+      if (!url || !isYouTubeUrl(url)) {
+        return {
+          text:
+            "I need a YouTube link to build your plan. Paste the course **playlist** URL " +
+            '(it has `list=` in it) and tell me what you want to learn — e.g. ' +
+            '"https://youtube.com/playlist?list=… — learn Python".',
+        };
+      }
+      if (!hasPlaylistId(url)) {
+        return {
+          text:
+            'That looks like a single video, not a playlist. Paste the **playlist** URL ' +
+            '(it contains `list=`) so I can build a full day-by-day plan.',
+        };
+      }
+      convo.collected.youtubeUrl = url;
+      convo.collected.goals = text.replace(url, '').trim() || 'general mastery of the material';
       convo.phase = 'questions';
-      return { text: 'Great. A few quick questions:\n\n1) Are you a beginner, intermediate, or advanced with this topic?' };
+      return {
+        text: 'Great. A few quick questions:\n\n1) Are you a beginner, intermediate, or advanced with this topic?',
+      };
     }
 
     case 'questions': {
+      // Each answer is validated; on invalid input we hint and re-ask the SAME
+      // question (the field stays unset, so we re-enter this branch next turn).
       if (convo.collected.level === undefined) {
-        convo.collected.level = parseLevel(text);
+        const r = validateLevel(text);
+        if (!r.ok) {
+          return { text: "I didn't catch that — are you a **beginner**, **intermediate**, or **advanced** with this topic?" };
+        }
+        convo.collected.level = r.value;
         return { text: '2) Roughly how many minutes can you study per day?' };
       }
       if (convo.collected.minutesPerDay === undefined) {
-        convo.collected.minutesPerDay = parseMinutes(text);
+        const r = validateMinutes(text);
+        if (!r.ok) {
+          return { text: 'Please give me a number of **minutes per day** — e.g. "30", "45", or "1 hour".' };
+        }
+        convo.collected.minutesPerDay = r.value;
         return { text: '3) Do you want hands-on projects/practice included? (yes/no)' };
       }
       if (convo.collected.includeProjects === undefined) {
-        convo.collected.includeProjects = parseYesNo(text);
+        const r = validateYesNo(text);
+        if (!r.ok) {
+          return { text: 'Just **yes** or **no** — should I include hands-on projects/practice?' };
+        }
+        convo.collected.includeProjects = r.value;
         return {
           text: '4) Any target deadline? e.g. "in 3 weeks" or "30 days" — or say "no" for no deadline.',
         };
       }
-      // Final question answered: capture (optional) deadline, then generate.
-      convo.collected.deadlineDays = parseDeadline(text);
+      // Final question: deadline (optional, but the answer must be understandable).
+      const r = validateDeadline(text);
+      if (!r.ok) {
+        return { text: 'Tell me a target like "in 3 weeks" or "30 days", or say "no" if there\'s no deadline.' };
+      }
+      convo.collected.deadlineDays = r.value;
       convo.phase = 'generate';
       return advance(convo, '');
     }
@@ -103,38 +140,79 @@ async function advance(convo: Conversation, text: string): Promise<{ text: strin
   }
 }
 
+type Valid<T> = { ok: true; value: T } | { ok: false };
+
 function extractUrl(text: string): string | undefined {
   const m = text.match(/https?:\/\/[^\s]+/);
   return m ? m[0] : undefined;
 }
 
-function parseLevel(text: string): 'beginner' | 'intermediate' | 'advanced' {
+function isYouTubeUrl(url: string): boolean {
+  return /(?:youtube\.com|youtu\.be)/i.test(url);
+}
+
+function hasPlaylistId(url: string): boolean {
+  return /[?&]list=[A-Za-z0-9_-]+/.test(url);
+}
+
+function validateLevel(text: string): Valid<'beginner' | 'intermediate' | 'advanced'> {
   const t = text.toLowerCase();
-  if (t.includes('adv')) return 'advanced';
-  if (t.includes('inter')) return 'intermediate';
-  return 'beginner';
+  if (/\b(advanced|expert|pro|experienced|senior)\b/.test(t)) return { ok: true, value: 'advanced' };
+  if (/\b(intermediate|inter|some experience|some|moderate|medium|a bit)\b/.test(t)) {
+    return { ok: true, value: 'intermediate' };
+  }
+  if (/\b(beginner|begin|new|newbie|novice|starter|start|basic|basics|zero|none|fresh|scratch)\b/.test(t)) {
+    return { ok: true, value: 'beginner' };
+  }
+  return { ok: false };
 }
 
-function parseMinutes(text: string): number {
-  const m = text.match(/\d+/);
-  const n = m ? parseInt(m[0], 10) : 45;
-  return Math.min(Math.max(n, 10), 600);
+function validateMinutes(text: string): Valid<number> {
+  const t = text.toLowerCase();
+  let mins = 0;
+  if (/\bhalf(?:\s+an?)?\s*hour\b/.test(t)) {
+    mins = 30;
+  } else if (/\ban?\s*hour\b/.test(t)) {
+    mins = 60;
+  } else {
+    const hr = t.match(/(\d+(?:\.\d+)?)\s*(?:h|hr|hrs|hour|hours)\b/);
+    const mn = t.match(/(\d+)\s*(?:m|min|mins|minute|minutes)\b/);
+    if (hr) mins += Math.round(parseFloat(hr[1]) * 60);
+    if (mn) mins += parseInt(mn[1], 10);
+    if (!hr && !mn) {
+      const bare = t.match(/\b(\d{1,3})\b/);
+      if (!bare) return { ok: false };
+      mins = parseInt(bare[1], 10);
+    }
+  }
+  if (!Number.isFinite(mins) || mins < 5 || mins > 600) return { ok: false };
+  return { ok: true, value: mins };
 }
 
-function parseYesNo(text: string): boolean {
+function validateYesNo(text: string): Valid<boolean> {
   const t = text.trim().toLowerCase();
-  return !(t.startsWith('n') || t.includes('no'));
+  if (/^(y|yes|yeah|yep|yup|sure|ok|okay|please|definitely|absolutely)\b/.test(t) || /\byes\b/.test(t)) {
+    return { ok: true, value: true };
+  }
+  if (/^(n|no|nope|nah)\b/.test(t) || /\b(no|don'?t|without|skip)\b/.test(t)) {
+    return { ok: true, value: false };
+  }
+  return { ok: false };
 }
 
-/** Parse a deadline answer into a day count, or undefined for "no deadline". */
-function parseDeadline(text: string): number | undefined {
+/** Valid result of `undefined` means "no deadline" (a legitimate answer). */
+function validateDeadline(text: string): Valid<number | undefined> {
   const t = text.trim().toLowerCase();
-  if (!t || /\b(no|none|nope|not|any\s*time|anytime|whenever|no rush)\b/.test(t)) return undefined;
-  const m = t.match(/(\d+)\s*(day|week|month|wk|mo)?/);
-  if (!m) return undefined;
+  if (!t) return { ok: false };
+  if (/\b(no|none|nope|not|any\s*time|anytime|whenever|no rush|no deadline|flexible)\b/.test(t)) {
+    return { ok: true, value: undefined };
+  }
+  const m = t.match(/(\d+)\s*(day|days|week|weeks|wk|month|months|mo)?/);
+  if (!m) return { ok: false };
   const n = parseInt(m[1], 10);
-  if (!Number.isFinite(n) || n <= 0) return undefined;
+  if (!Number.isFinite(n) || n <= 0) return { ok: false };
   const unit = m[2] ?? 'day';
-  const days = unit.startsWith('week') || unit === 'wk' ? n * 7 : unit.startsWith('mo') ? n * 30 : n;
-  return Math.min(Math.max(days, 1), 730);
+  const days =
+    unit.startsWith('week') || unit === 'wk' ? n * 7 : unit.startsWith('mo') ? n * 30 : n;
+  return { ok: true, value: Math.min(Math.max(days, 1), 730) };
 }
