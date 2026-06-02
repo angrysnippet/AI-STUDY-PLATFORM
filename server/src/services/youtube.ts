@@ -22,7 +22,8 @@ export async function getCourseMeta(url: string): Promise<CourseMeta> {
   if (config.stub.youtube) return stubMeta(url);
 
   const cached = url ? await repo.getCourse(url) : null;
-  if (cached && cached.videos?.length) {
+  // Require videoId on cached videos — entries cached before links existed are re-fetched.
+  if (cached && cached.videos?.length && cached.videos[0]?.videoId) {
     return {
       title: cached.title,
       videoCount: cached.videoCount,
@@ -117,6 +118,7 @@ async function fetchYouTubeMeta(url: string): Promise<CourseMeta> {
       position: idx + 1,
       title: e.title,
       seconds: durations.get(e.videoId) || 0,
+      videoId: e.videoId,
     }));
 
   const totalSeconds = videos.reduce((sum, v) => sum + v.seconds, 0);
@@ -160,6 +162,7 @@ function stubMeta(url: string): CourseMeta {
     position: i + 1,
     title: `${i + 1}. ${topics[i % topics.length]}`,
     seconds: (10 + ((seed + i * 7) % 16)) * 60, // 10..25 min each
+    videoId: '', // stub has no real video → no link
   }));
   const totalSeconds = videos.reduce((s, v) => s + v.seconds, 0);
   return {

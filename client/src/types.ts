@@ -1,6 +1,7 @@
 export interface PlanTask {
   text: string;
   done?: boolean;
+  url?: string;
 }
 export interface PlanBlock {
   title: string;

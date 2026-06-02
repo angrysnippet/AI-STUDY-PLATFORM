@@ -35,6 +35,8 @@ export interface Feasibility {
 export interface PlanTask {
   text: string;
   done?: boolean;
+  /** For Watch tasks: a direct link to the video. */
+  url?: string;
 }
 
 export interface PlanBlock {

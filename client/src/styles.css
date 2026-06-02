@@ -185,6 +185,8 @@ button { font-family: inherit; }
 .block ul { margin: 0; padding-left: 1.05rem; }
 .block li { font-size: 13.5px; color: var(--text); line-height: 1.6; margin-bottom: 0.25rem; }
 .block li::marker { color: var(--text-3); }
+.watch-link { color: var(--accent); text-decoration: none; border-bottom: 1px dotted rgba(6, 214, 160, 0.4); }
+.watch-link:hover { border-bottom-style: solid; }
 
 /* ── Doubt solver ────────────────────────────────────────────────────────── */
 .doubt-toggle {

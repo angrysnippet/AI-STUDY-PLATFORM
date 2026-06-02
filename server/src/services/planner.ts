@@ -1,5 +1,5 @@
 import type { CollectedInputs, CourseVideo, Feasibility, PlanBlock, PlanDay } from '../types';
-import type { CourseMeta } from './youtube';
+import { extractPlaylistId, type CourseMeta } from './youtube';
 
 /**
  * Deterministic study-plan builder. Packs the playlist's real videos into days
@@ -31,6 +31,7 @@ export function buildStudyPlan(inputs: CollectedInputs, meta: CourseMeta): Built
   const overhead = includeProjects ? PRACTICE_OVERHEAD : REVIEW_OVERHEAD;
   const dailySec = minutesPerDay * 60;
   const watchSecPerDay = dailySec / (1 + overhead); // time available to *watch* per day
+  const playlistId = inputs.youtubeUrl ? extractPlaylistId(inputs.youtubeUrl) : null;
 
   // 1) Pack videos into day-groups by the daily watch budget.
   const groups = packVideos(meta.videos, watchSecPerDay, goalMult);
@@ -41,7 +42,7 @@ export function buildStudyPlan(inputs: CollectedInputs, meta: CourseMeta): Built
   let studyCount = 0;
 
   for (const group of groups) {
-    days.push(makeStudyDay(days.length + 1, group, minutesPerDay, includeProjects, goalMult));
+    days.push(makeStudyDay(days.length + 1, group, minutesPerDay, includeProjects, goalMult, playlistId));
     coveredTitles.push(...group.map((v) => cleanTitle(v.title)));
     studyCount++;
 
@@ -81,6 +82,7 @@ function makeStudyDay(
   minutesPerDay: number,
   includeProjects: boolean,
   goalMult: number,
+  playlistId: string | null,
 ): PlanDay {
   const topics = group.map((v) => cleanTitle(v.title));
   const watchMin = Math.round((group.reduce((s, v) => s + Math.max(v.seconds, 60), 0) * goalMult) / 60);
@@ -90,6 +92,7 @@ function makeStudyDay(
       title: `Watch (~${watchMin} min)`,
       tasks: group.map((v) => ({
         text: `▶ ${cleanTitle(v.title)} (${fmt(v.seconds)})`,
+        url: watchUrl(v.videoId, playlistId),
       })),
     },
     {
@@ -210,6 +213,13 @@ function dayTitle(topics: string[]): string {
   if (topics.length === 0) return 'Study session';
   if (topics.length === 1) return topics[0];
   return `${topics[0]} (+${topics.length - 1} more)`;
+}
+
+/** Direct watch link, opened in playlist context when we know the playlist id. */
+function watchUrl(videoId: string, playlistId: string | null): string | undefined {
+  if (!videoId) return undefined;
+  const base = `https://www.youtube.com/watch?v=${videoId}`;
+  return playlistId ? `${base}&list=${playlistId}` : base;
 }
 
 function fmt(seconds: number): string {

@@ -180,7 +180,15 @@ function DayCard({
           <div className="block-title">{b.title}</div>
           <ul>
             {b.tasks.map((t, ti) => (
-              <li key={ti}>{t.text}</li>
+              <li key={ti}>
+                {t.url ? (
+                  <a href={t.url} target="_blank" rel="noreferrer" className="watch-link">
+                    {t.text}
+                  </a>
+                ) : (
+                  t.text
+                )}
+              </li>
             ))}
           </ul>
         </div>
