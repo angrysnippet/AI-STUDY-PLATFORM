@@ -13,6 +13,22 @@ export interface CollectedInputs {
   level?: 'beginner' | 'intermediate' | 'advanced';
   minutesPerDay?: number;
   includeProjects?: boolean;
+  /** Optional target: finish within this many days (parsed from a date or "N weeks"). */
+  deadlineDays?: number;
+}
+
+/** A single video in the source playlist (real title + real duration). */
+export interface CourseVideo {
+  position: number;
+  title: string;
+  seconds: number;
+}
+
+export type FeasibilityGrade = 'FEASIBLE' | 'TIGHT' | 'TOO_LONG';
+
+export interface Feasibility {
+  grade: FeasibilityGrade;
+  note: string;
 }
 
 export interface PlanTask {
@@ -28,6 +44,8 @@ export interface PlanBlock {
 export interface PlanDay {
   day: number;
   title: string;
+  /** 'study' = watch/review/practice; 'project' = a project checkpoint day. */
+  kind: 'study' | 'project';
   blocks: PlanBlock[];
 }
 
@@ -40,6 +58,7 @@ export interface StudyPlan {
   minutesPerDay: number;
   includeProjects: boolean;
   estimatedDays: number;
+  feasibility: Feasibility;
   days: PlanDay[];
   createdAt: string;
 }
@@ -61,12 +80,13 @@ export interface Progress {
   updatedAt: string;
 }
 
-/** Cached YouTube course metadata, keyed by playlist/video URL. */
+/** Cached YouTube course metadata (incl. per-video list), keyed by playlist URL. */
 export interface Course {
   youtubeUrl: string;
   title: string;
   videoCount: number;
   totalMinutes: number;
+  videos: CourseVideo[];
   cachedAt: string;
 }
 

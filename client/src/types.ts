@@ -9,7 +9,13 @@ export interface PlanBlock {
 export interface PlanDay {
   day: number;
   title: string;
+  kind: 'study' | 'project';
   blocks: PlanBlock[];
+}
+export type FeasibilityGrade = 'FEASIBLE' | 'TIGHT' | 'TOO_LONG';
+export interface Feasibility {
+  grade: FeasibilityGrade;
+  note: string;
 }
 export interface StudyPlan {
   id: string;
@@ -20,6 +26,7 @@ export interface StudyPlan {
   minutesPerDay: number;
   includeProjects: boolean;
   estimatedDays: number;
+  feasibility?: Feasibility;
   days: PlanDay[];
   createdAt: string;
 }

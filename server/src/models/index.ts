@@ -30,6 +30,7 @@ const courseSchema = new Schema({
   title: { type: String, required: true },
   videoCount: { type: Number, required: true },
   totalMinutes: { type: Number, required: true },
+  videos: { type: Schema.Types.Mixed, default: [] },
   cachedAt: { type: String, required: true },
 });
 export const CourseModel = model('Course', courseSchema);
@@ -44,6 +45,7 @@ const planSchema = new Schema({
   minutesPerDay: Number,
   includeProjects: Boolean,
   estimatedDays: Number,
+  feasibility: { type: Schema.Types.Mixed, default: null },
   days: { type: Schema.Types.Mixed, default: [] },
   createdAt: String,
 });

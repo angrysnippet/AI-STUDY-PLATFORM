@@ -72,7 +72,12 @@ async function advance(convo: Conversation, text: string): Promise<{ text: strin
       }
       if (convo.collected.includeProjects === undefined) {
         convo.collected.includeProjects = parseYesNo(text);
+        return {
+          text: '4) Any target deadline? e.g. "in 3 weeks" or "30 days" — or say "no" for no deadline.',
+        };
       }
+      // Final question answered: capture (optional) deadline, then generate.
+      convo.collected.deadlineDays = parseDeadline(text);
       convo.phase = 'generate';
       return advance(convo, '');
     }
@@ -83,9 +88,12 @@ async function advance(convo: Conversation, text: string): Promise<{ text: strin
       await repo.savePlan(plan);
       convo.planId = plan.id;
       convo.phase = 'done';
+      const fb = plan.feasibility;
+      const flag = fb.grade === 'FEASIBLE' ? '✅' : fb.grade === 'TIGHT' ? '⚠️' : '🛑';
       const summary =
         `Here's your ${plan.estimatedDays}-day plan for "${plan.courseTitle}" ` +
-        `(~${plan.minutesPerDay} min/day, ${plan.level}). Review it on the right — you can mark days done as you go.`;
+        `(~${plan.minutesPerDay} min/day, ${plan.level}).\n\n` +
+        `${flag} ${fb.grade}: ${fb.note}\n\nReview it on the right — mark days done as you go.`;
       return { text: summary, plan };
     }
 
@@ -116,4 +124,17 @@ function parseMinutes(text: string): number {
 function parseYesNo(text: string): boolean {
   const t = text.trim().toLowerCase();
   return !(t.startsWith('n') || t.includes('no'));
+}
+
+/** Parse a deadline answer into a day count, or undefined for "no deadline". */
+function parseDeadline(text: string): number | undefined {
+  const t = text.trim().toLowerCase();
+  if (!t || /\b(no|none|nope|not|any\s*time|anytime|whenever|no rush)\b/.test(t)) return undefined;
+  const m = t.match(/(\d+)\s*(day|week|month|wk|mo)?/);
+  if (!m) return undefined;
+  const n = parseInt(m[1], 10);
+  if (!Number.isFinite(n) || n <= 0) return undefined;
+  const unit = m[2] ?? 'day';
+  const days = unit.startsWith('week') || unit === 'wk' ? n * 7 : unit.startsWith('mo') ? n * 30 : n;
+  return Math.min(Math.max(days, 1), 730);
 }

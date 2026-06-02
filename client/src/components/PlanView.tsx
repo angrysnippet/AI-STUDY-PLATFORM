@@ -23,6 +23,19 @@ export function PlanView({ plan, completedDays, onToggleDay, busyDay }: Props) {
         {plan.includeProjects ? ' · projects' : ''}
       </div>
 
+      {plan.feasibility && (
+        <div className={`feasibility ${plan.feasibility.grade.toLowerCase()}`}>
+          <strong>
+            {plan.feasibility.grade === 'FEASIBLE'
+              ? '✅ Feasible'
+              : plan.feasibility.grade === 'TIGHT'
+                ? '⚠️ Tight'
+                : '🛑 Too long'}
+          </strong>{' '}
+          {plan.feasibility.note}
+        </div>
+      )}
+
       <div className="progress">
         <div className="progress-bar">
           <span style={{ width: `${pct}%` }} />
@@ -37,7 +50,10 @@ export function PlanView({ plan, completedDays, onToggleDay, busyDay }: Props) {
         const locked = !isDone && d.day !== firstIncomplete;
         const busy = busyDay === d.day;
         return (
-          <div key={d.day} className={`day${isDone ? ' done' : ''}${locked ? ' locked' : ''}`}>
+          <div
+            key={d.day}
+            className={`day${isDone ? ' done' : ''}${locked ? ' locked' : ''}${d.kind === 'project' ? ' project' : ''}`}
+          >
             <label className="day-head">
               <input
                 type="checkbox"
@@ -46,7 +62,7 @@ export function PlanView({ plan, completedDays, onToggleDay, busyDay }: Props) {
                 onChange={(e) => onToggleDay(d.day, e.target.checked)}
               />
               <span className="day-title">
-                Day {d.day} — {d.title}
+                {d.kind === 'project' && <span className="badge">PROJECT</span>} Day {d.day} — {d.title}
               </span>
               {locked && <span className="lock" title="Finish earlier days first">🔒</span>}
             </label>

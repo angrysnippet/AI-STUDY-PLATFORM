@@ -105,6 +105,16 @@ body { background: var(--bg); color: var(--text); }
   color: #ffb3b3; border-radius: 8px; padding: 0.5rem 0.75rem; font-size: 13px; margin-bottom: 1rem;
 }
 
+/* Feasibility banner */
+.feasibility { border-radius: 10px; padding: 0.6rem 0.85rem; font-size: 13px; line-height: 1.5; margin-bottom: 1rem; border: 1px solid; }
+.feasibility.feasible { background: rgba(6, 214, 160, 0.1); border-color: rgba(6, 214, 160, 0.4); color: #8ff0d4; }
+.feasibility.tight { background: rgba(255, 209, 102, 0.1); border-color: rgba(255, 209, 102, 0.4); color: #ffe08a; }
+.feasibility.too_long { background: rgba(255, 107, 107, 0.12); border-color: rgba(255, 107, 107, 0.4); color: #ffb3b3; }
+
+/* Project-day accent + badge */
+.day.project { border-color: rgba(78, 205, 196, 0.55); background: rgba(78, 205, 196, 0.06); }
+.badge { font-size: 9.5px; font-weight: 700; letter-spacing: 0.5px; background: var(--accent2); color: #06231f; padding: 1px 6px; border-radius: 6px; margin-right: 4px; vertical-align: middle; }
+
 /* Completion progress */
 .progress { display: flex; align-items: center; gap: 0.7rem; margin-bottom: 1.25rem; }
 .progress-bar { flex: 1; height: 7px; background: var(--surface2); border-radius: 999px; overflow: hidden; }
