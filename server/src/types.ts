@@ -74,6 +74,23 @@ export interface Conversation {
   course?: { title: string; videoCount: number; totalMinutes: number };
 }
 
+/** One message in a per-topic doubt-solver thread. */
+export interface DoubtMessage {
+  role: 'user' | 'assistant';
+  text: string;
+  at: string;
+}
+
+/** A doubt-solver conversation scoped to one day/topic of a plan, per user. */
+export interface DoubtThread {
+  planId: string;
+  userId: string;
+  day: number;
+  topic: string;
+  messages: DoubtMessage[];
+  updatedAt: string;
+}
+
 /** Per-user, per-plan completion tracking (which day numbers are done). */
 export interface Progress {
   planId: string;

@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
-import type { PlanDay, StudyPlan } from '../types';
+import { askDoubt, getDoubts } from '../api/client';
+import type { DoubtMessage, PlanDay, StudyPlan } from '../types';
 
 interface Props {
   plan: StudyPlan;
@@ -107,6 +108,7 @@ export function PlanView({ plan, completedDays, onToggleDay, busyDay }: Props) {
                 {wkDays.map((d) => (
                   <DayCard
                     key={d.day}
+                    planId={plan.id}
                     day={d}
                     isDone={done.has(d.day)}
                     locked={!done.has(d.day) && d.day !== firstIncomplete}
@@ -125,6 +127,7 @@ export function PlanView({ plan, completedDays, onToggleDay, busyDay }: Props) {
 }
 
 function DayCard({
+  planId,
   day,
   isDone,
   locked,
@@ -132,6 +135,7 @@ function DayCard({
   busy,
   onToggle,
 }: {
+  planId: string;
   day: PlanDay;
   isDone: boolean;
   locked: boolean;
@@ -139,6 +143,7 @@ function DayCard({
   busy: boolean;
   onToggle: (day: number, done: boolean) => void;
 }) {
+  const [showDoubts, setShowDoubts] = useState(false);
   const cls = [
     'day',
     isDone ? 'done' : '',
@@ -180,6 +185,73 @@ function DayCard({
           </ul>
         </div>
       ))}
+
+      <button className="doubt-toggle" onClick={() => setShowDoubts((v) => !v)}>
+        {showDoubts ? '× Close doubts' : '💬 Ask a doubt about this topic'}
+      </button>
+      {showDoubts && <DoubtPanel planId={planId} day={day.day} topic={day.title} />}
+    </div>
+  );
+}
+
+function DoubtPanel({ planId, day, topic }: { planId: string; day: number; topic: string }) {
+  const [messages, setMessages] = useState<DoubtMessage[]>([]);
+  const [input, setInput] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const endRef = useRef<HTMLDivElement>(null);
+
+  // Load any existing thread for this topic when the panel opens.
+  useEffect(() => {
+    getDoubts(planId, day)
+      .then((t) => setMessages(t.messages))
+      .catch(() => {});
+  }, [planId, day]);
+
+  useEffect(() => {
+    endRef.current?.scrollIntoView({ block: 'nearest' });
+  }, [messages, busy]);
+
+  async function ask(e: React.FormEvent) {
+    e.preventDefault();
+    const q = input.trim();
+    if (!q || busy) return;
+    setInput('');
+    setError('');
+    setMessages((m) => [...m, { role: 'user', text: q, at: new Date().toISOString() }]);
+    setBusy(true);
+    try {
+      const t = await askDoubt(planId, day, q);
+      setMessages(t.messages);
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="doubt-panel">
+      <div className="doubt-hint">Ask anything about “{topic}”.</div>
+      <div className="doubt-messages">
+        {messages.map((m, i) => (
+          <div key={i} className={`doubt-msg ${m.role}`}>
+            {m.text}
+          </div>
+        ))}
+        {busy && <div className="doubt-msg assistant thinking">Thinking…</div>}
+        <div ref={endRef} />
+      </div>
+      {error && <div className="notice">{error}</div>}
+      <form className="doubt-composer" onSubmit={ask}>
+        <input
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          placeholder="Type your question…"
+          disabled={busy}
+        />
+        <button disabled={busy}>Ask</button>
+      </form>
     </div>
   );
 }

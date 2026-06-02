@@ -1,4 +1,12 @@
-import type { AgentReply, AuthConfig, PlanSummary, Progress, StudyPlan, User } from '../types';
+import type {
+  AgentReply,
+  AuthConfig,
+  DoubtThread,
+  PlanSummary,
+  Progress,
+  StudyPlan,
+  User,
+} from '../types';
 
 const BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:4000';
 const TOKEN_KEY = 'asp_token';
@@ -93,5 +101,16 @@ export function setDayDone(planId: string, day: number, done: boolean): Promise<
   return request<Progress>(`/api/plans/${planId}/progress`, {
     method: 'POST',
     body: JSON.stringify({ day, done }),
+  });
+}
+
+// ── Doubt solver ───────────────────────────────────────────────────────────────
+export function getDoubts(planId: string, day: number): Promise<DoubtThread> {
+  return request<DoubtThread>(`/api/plans/${planId}/doubts/${day}`);
+}
+export function askDoubt(planId: string, day: number, question: string): Promise<DoubtThread> {
+  return request<DoubtThread>(`/api/plans/${planId}/doubts/${day}`, {
+    method: 'POST',
+    body: JSON.stringify({ question }),
   });
 }

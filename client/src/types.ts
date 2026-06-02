@@ -48,6 +48,19 @@ export interface Progress {
   completedDays: number[];
   updatedAt: string;
 }
+export interface DoubtMessage {
+  role: 'user' | 'assistant';
+  text: string;
+  at: string;
+}
+export interface DoubtThread {
+  planId: string;
+  userId: string;
+  day: number;
+  topic: string;
+  messages: DoubtMessage[];
+  updatedAt: string;
+}
 export interface ChatMessage {
   role: 'user' | 'assistant';
   text: string;

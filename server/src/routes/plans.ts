@@ -2,7 +2,8 @@ import { Router } from 'express';
 
 import { repo } from '../db/repository';
 import { userId } from '../middleware/auth';
-import type { Progress } from '../types';
+import { answerDoubt } from '../services/doubt';
+import type { DoubtThread, PlanDay, Progress, StudyPlan } from '../types';
 
 // Mounted behind requireAuth, so req.user is always present here.
 export const plansRouter = Router();
@@ -101,4 +102,78 @@ plansRouter.post('/:id/progress', async (req, res) => {
 
 function emptyProgress(planId: string, userId: string): Progress {
   return { planId, userId, completedDays: [], updatedAt: new Date().toISOString() };
+}
+
+// ── Doubt solver (per-topic Q&A) ─────────────────────────────────────────────
+
+// Fetch the doubt thread for one day of a plan.
+plansRouter.get('/:id/doubts/:day', async (req, res) => {
+  const uid = userId(req);
+  const plan = await repo.getPlan(req.params.id);
+  if (!plan || plan.userId !== uid) {
+    res.status(404).json({ error: 'plan not found' });
+    return;
+  }
+  const day = Number(req.params.day);
+  const dayObj = plan.days.find((d) => d.day === day);
+  if (!dayObj) {
+    res.status(400).json({ error: 'invalid day' });
+    return;
+  }
+  const thread = (await repo.getDoubtThread(plan.id, uid, day)) ?? emptyThread(plan, uid, dayObj);
+  res.json(thread);
+});
+
+// Ask a question about one day's topic; appends Q + AI answer and returns the thread.
+plansRouter.post('/:id/doubts/:day', async (req, res) => {
+  const uid = userId(req);
+  const plan = await repo.getPlan(req.params.id);
+  if (!plan || plan.userId !== uid) {
+    res.status(404).json({ error: 'plan not found' });
+    return;
+  }
+  const day = Number(req.params.day);
+  const dayObj = plan.days.find((d) => d.day === day);
+  if (!dayObj) {
+    res.status(400).json({ error: 'invalid day' });
+    return;
+  }
+  const question = String(req.body?.question ?? '').trim();
+  if (!question) {
+    res.status(400).json({ error: 'question is required' });
+    return;
+  }
+
+  const thread = (await repo.getDoubtThread(plan.id, uid, day)) ?? emptyThread(plan, uid, dayObj);
+  const history = thread.messages.slice(); // prior turns, before this question
+  const now = new Date().toISOString();
+  thread.messages.push({ role: 'user', text: question, at: now });
+
+  const answer = await answerDoubt(
+    { courseTitle: plan.courseTitle, dayTitle: dayObj.title, topics: watchTopics(dayObj), level: plan.level },
+    question,
+    history,
+  );
+  thread.messages.push({ role: 'assistant', text: answer, at: new Date().toISOString() });
+  thread.updatedAt = new Date().toISOString();
+  await repo.saveDoubtThread(thread);
+  res.json(thread);
+});
+
+function emptyThread(plan: StudyPlan, userId: string, dayObj: PlanDay): DoubtThread {
+  return {
+    planId: plan.id,
+    userId,
+    day: dayObj.day,
+    topic: dayObj.title,
+    messages: [],
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+/** The cleaned video titles a day covers (from its Watch block). */
+function watchTopics(day: PlanDay): string[] {
+  const watch = day.blocks.find((b) => b.title.startsWith('Watch'));
+  if (!watch) return [day.title];
+  return watch.tasks.map((t) => t.text.replace(/^▶\s*/, '').replace(/\s*\([^)]*\)\s*$/, ''));
 }

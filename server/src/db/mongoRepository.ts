@@ -1,8 +1,15 @@
 import mongoose from 'mongoose';
 
 import { config } from '../config/env';
-import { ConversationModel, CourseModel, PlanModel, ProgressModel, UserModel } from '../models';
-import type { Conversation, Course, Progress, StudyPlan, User } from '../types';
+import {
+  ConversationModel,
+  CourseModel,
+  DoubtModel,
+  PlanModel,
+  ProgressModel,
+  UserModel,
+} from '../models';
+import type { Conversation, Course, DoubtThread, Progress, StudyPlan, User } from '../types';
 import type { Repository } from './repository';
 
 /** Mongo/Mongoose-backed repository, used when MONGODB_URI is a real value. */
@@ -67,6 +74,16 @@ export class MongoRepository implements Repository {
     );
   }
 
+  // ── Doubt threads ────────────────────────────────────────────────────────────
+  async getDoubtThread(planId: string, userId: string, day: number): Promise<DoubtThread | null> {
+    const doc = await DoubtModel.findById(doubtId(planId, userId, day)).lean<DoubtThread>().exec();
+    return doc ? strip(doc) : null;
+  }
+  async saveDoubtThread(t: DoubtThread): Promise<void> {
+    const _id = doubtId(t.planId, t.userId, t.day);
+    await DoubtModel.replaceOne({ _id }, { _id, ...t }, { upsert: true });
+  }
+
   // ── Course cache ─────────────────────────────────────────────────────────────
   async getCourse(youtubeUrl: string): Promise<Course | null> {
     const doc = await CourseModel.findOne({ youtubeUrl }).lean<Course>().exec();
@@ -79,6 +96,10 @@ export class MongoRepository implements Repository {
 
 function progressId(planId: string, userId: string): string {
   return `${planId}:${userId}`;
+}
+
+function doubtId(planId: string, userId: string, day: number): string {
+  return `${planId}:${userId}:${day}`;
 }
 
 /** Drop Mongo bookkeeping fields (`_id`, `__v`) so callers see clean domain objects. */

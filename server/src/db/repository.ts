@@ -1,5 +1,5 @@
 import { config } from '../config/env';
-import type { Conversation, Course, Progress, StudyPlan, User } from '../types';
+import type { Conversation, Course, DoubtThread, Progress, StudyPlan, User } from '../types';
 
 /**
  * Storage interface used by the rest of the app. Two implementations sit behind
@@ -22,6 +22,9 @@ export interface Repository {
   getProgress(planId: string, userId: string): Promise<Progress | null>;
   saveProgress(p: Progress): Promise<void>;
 
+  getDoubtThread(planId: string, userId: string, day: number): Promise<DoubtThread | null>;
+  saveDoubtThread(t: DoubtThread): Promise<void>;
+
   getCourse(youtubeUrl: string): Promise<Course | null>;
   saveCourse(c: Course): Promise<void>;
 }
@@ -31,6 +34,7 @@ class InMemoryRepository implements Repository {
   private conversations = new Map<string, Conversation>();
   private plans = new Map<string, StudyPlan>();
   private progress = new Map<string, Progress>(); // key: `${planId}:${userId}`
+  private doubts = new Map<string, DoubtThread>(); // key: `${planId}:${userId}:${day}`
   private courses = new Map<string, Course>(); // key: youtubeUrl
 
   async getUser(id: string): Promise<User | null> {
@@ -77,6 +81,14 @@ class InMemoryRepository implements Repository {
     this.progress.set(`${p.planId}:${p.userId}`, structuredClone(p));
   }
 
+  async getDoubtThread(planId: string, userId: string, day: number): Promise<DoubtThread | null> {
+    const t = this.doubts.get(`${planId}:${userId}:${day}`);
+    return t ? structuredClone(t) : null;
+  }
+  async saveDoubtThread(t: DoubtThread): Promise<void> {
+    this.doubts.set(`${t.planId}:${t.userId}:${t.day}`, structuredClone(t));
+  }
+
   async getCourse(youtubeUrl: string): Promise<Course | null> {
     const c = this.courses.get(youtubeUrl);
     return c ? structuredClone(c) : null;
@@ -106,6 +118,9 @@ class RepositoryProxy implements Repository {
   deletePlan = (id: string) => this.backend.deletePlan(id);
   getProgress = (planId: string, userId: string) => this.backend.getProgress(planId, userId);
   saveProgress = (p: Progress) => this.backend.saveProgress(p);
+  getDoubtThread = (planId: string, userId: string, day: number) =>
+    this.backend.getDoubtThread(planId, userId, day);
+  saveDoubtThread = (t: DoubtThread) => this.backend.saveDoubtThread(t);
   getCourse = (youtubeUrl: string) => this.backend.getCourse(youtubeUrl);
   saveCourse = (c: Course) => this.backend.saveCourse(c);
 }

@@ -61,6 +61,18 @@ const progressSchema = new Schema({
 });
 export const ProgressModel = model('Progress', progressSchema);
 
+// ── Doubt threads (per-topic Q&A) ────────────────────────────────────────────
+const doubtSchema = new Schema({
+  _id: { type: String, required: true }, // `${planId}:${userId}:${day}`
+  planId: { type: String, required: true, index: true },
+  userId: { type: String, required: true, index: true },
+  day: { type: Number, required: true },
+  topic: String,
+  messages: { type: Schema.Types.Mixed, default: [] },
+  updatedAt: String,
+});
+export const DoubtModel = model('DoubtThread', doubtSchema);
+
 // ── Conversation (agent state) ───────────────────────────────────────────────
 const conversationSchema = new Schema({
   _id: { type: String, required: true }, // conversation.id (uuid)
