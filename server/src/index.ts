@@ -12,7 +12,27 @@ const app = express();
 assertProductionConfig();
 const repositoryReady = initRepository();
 
-app.use(cors({ origin: config.clientUrl }));
+// Allow the configured client, any *.vercel.app alias (preview/prod), and localhost.
+app.use(
+  cors({
+    origin(origin, cb) {
+      if (!origin) return cb(null, true); // same-origin, curl, server-to-server
+      try {
+        const host = new URL(origin).hostname;
+        if (
+          origin === config.clientUrl ||
+          host === 'localhost' ||
+          host.endsWith('.vercel.app')
+        ) {
+          return cb(null, true);
+        }
+      } catch {
+        /* fall through to deny */
+      }
+      return cb(null, false);
+    },
+  }),
+);
 app.use(express.json({ limit: '1mb' }));
 app.use(async (_req, _res, next) => {
   await repositoryReady;
