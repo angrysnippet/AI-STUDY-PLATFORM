@@ -38,23 +38,51 @@ export default function App() {
   const listRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    getAuthConfig()
-      .then(setAuthConfig)
-      .catch(() => setConfigError(true));
+    let cancelled = false;
+
+    // Retry while the (serverless) API cold-starts, instead of failing instantly.
+    async function loadConfig(attempt = 0): Promise<void> {
+      try {
+        const cfg = await getAuthConfig();
+        if (!cancelled) {
+          setAuthConfig(cfg);
+          setConfigError(false);
+        }
+      } catch {
+        if (cancelled) return;
+        if (attempt < 6) {
+          window.setTimeout(() => loadConfig(attempt + 1), 2500);
+        } else {
+          setConfigError(true);
+        }
+      }
+    }
+    loadConfig();
 
     if (getToken()) {
       getMe()
-        .then(setUser)
+        .then((u) => !cancelled && setUser(u))
         .catch(() => clearToken())
-        .finally(() => setAuthChecked(true));
+        .finally(() => !cancelled && setAuthChecked(true));
     } else {
       setAuthChecked(true);
     }
 
     const drop = () => resetToLoggedOut();
     onUnauthorized.addEventListener('unauthorized', drop);
-    return () => onUnauthorized.removeEventListener('unauthorized', drop);
+    return () => {
+      cancelled = true;
+      onUnauthorized.removeEventListener('unauthorized', drop);
+    };
   }, []);
+
+  // Let the "can't reach server" Retry button restart the config loader.
+  function retryConfig() {
+    setConfigError(false);
+    getAuthConfig()
+      .then(setAuthConfig)
+      .catch(() => setConfigError(true));
+  }
 
   useEffect(() => {
     if (!user) return;
@@ -162,7 +190,10 @@ export default function App() {
   }
 
   if (!authChecked) return <div className="booting">Loading…</div>;
-  if (!user) return <Login authConfig={authConfig} configError={configError} onLogin={setUser} />;
+  if (!user)
+    return (
+      <Login authConfig={authConfig} configError={configError} onRetry={retryConfig} onLogin={setUser} />
+    );
 
   return (
     <div className="app">

@@ -25,13 +25,20 @@ export function clearToken(): void {
 /** Fired when the server rejects our token (401) so the app can drop to login. */
 export const onUnauthorized = new EventTarget();
 
-async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+async function request<T>(path: string, init: RequestInit = {}, timeoutMs?: number): Promise<T> {
   const token = getToken();
   const headers = new Headers(init.headers);
   if (init.body) headers.set('Content-Type', 'application/json');
   if (token) headers.set('Authorization', `Bearer ${token}`);
 
-  const res = await fetch(`${BASE}${path}`, { ...init, headers });
+  const controller = new AbortController();
+  const timer = timeoutMs ? setTimeout(() => controller.abort(), timeoutMs) : undefined;
+  let res: Response;
+  try {
+    res = await fetch(`${BASE}${path}`, { ...init, headers, signal: controller.signal });
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
   if (res.status === 401) {
     clearToken();
     onUnauthorized.dispatchEvent(new Event('unauthorized'));
@@ -46,7 +53,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 
 // ── Auth ───────────────────────────────────────────────────────────────────────
 export function getAuthConfig(): Promise<AuthConfig> {
-  return request<AuthConfig>('/api/auth/config');
+  return request<AuthConfig>('/api/auth/config', {}, 12000);
 }
 
 export async function devLogin(name?: string): Promise<User> {
@@ -68,7 +75,7 @@ export async function googleLogin(credential: string): Promise<User> {
 }
 
 export async function getMe(): Promise<User> {
-  const { user } = await request<{ user: User }>('/api/auth/me');
+  const { user } = await request<{ user: User }>('/api/auth/me', {}, 12000);
   return user;
 }
 

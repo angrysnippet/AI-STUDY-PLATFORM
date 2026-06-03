@@ -6,10 +6,11 @@ import type { AuthConfig, User } from '../types';
 interface Props {
   authConfig: AuthConfig | null;
   configError?: boolean;
+  onRetry?: () => void;
   onLogin: (user: User) => void;
 }
 
-export function Login({ authConfig, configError, onLogin }: Props) {
+export function Login({ authConfig, configError, onRetry, onLogin }: Props) {
   const [name, setName] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -93,18 +94,19 @@ export function Login({ authConfig, configError, onLogin }: Props) {
 
           {configError ? (
             <div className="auth-state">
-              <div className="notice">Can’t reach the server right now.</div>
+              <div className="notice">Couldn’t reach the server.</div>
               <p className="hint">
-                If it was just deployed it may be waking up (free hosting sleeps when idle). Give it
-                a few seconds, then retry.
+                The free server sleeps when idle and can take a moment to wake. Give it a few
+                seconds, then retry.
               </p>
-              <button className="retry" onClick={() => location.reload()}>
+              <button className="retry" onClick={() => (onRetry ? onRetry() : location.reload())}>
                 Retry
               </button>
             </div>
           ) : !authConfig ? (
             <div className="auth-state">
-              <p className="hint">Connecting to the server…</p>
+              <div className="spinner" />
+              <p className="hint">Waking up the server… the first load can take up to ~20s.</p>
             </div>
           ) : (
             <>
