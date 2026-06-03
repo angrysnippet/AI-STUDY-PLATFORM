@@ -20,6 +20,7 @@ import type { AuthConfig, ChatMessage, PlanSummary, StudyPlan, User } from './ty
 
 export default function App() {
   const [authConfig, setAuthConfig] = useState<AuthConfig | null>(null);
+  const [configError, setConfigError] = useState(false);
   const [authChecked, setAuthChecked] = useState(false);
   const [user, setUser] = useState<User | null>(null);
 
@@ -39,7 +40,7 @@ export default function App() {
   useEffect(() => {
     getAuthConfig()
       .then(setAuthConfig)
-      .catch(() => setAuthConfig({ devLogin: true, google: false, googleClientId: null }));
+      .catch(() => setConfigError(true));
 
     if (getToken()) {
       getMe()
@@ -161,7 +162,7 @@ export default function App() {
   }
 
   if (!authChecked) return <div className="booting">Loading…</div>;
-  if (!user) return <Login authConfig={authConfig} onLogin={setUser} />;
+  if (!user) return <Login authConfig={authConfig} configError={configError} onLogin={setUser} />;
 
   return (
     <div className="app">

@@ -5,10 +5,11 @@ import type { AuthConfig, User } from '../types';
 
 interface Props {
   authConfig: AuthConfig | null;
+  configError?: boolean;
   onLogin: (user: User) => void;
 }
 
-export function Login({ authConfig, onLogin }: Props) {
+export function Login({ authConfig, configError, onLogin }: Props) {
   const [name, setName] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -90,26 +91,48 @@ export function Login({ authConfig, onLogin }: Props) {
           <h2>Get started</h2>
           <p className="sub">Sign in to create and save your study plans.</p>
 
-          {authConfig?.google && <div ref={googleBtn} className="google-btn" />}
-          {authConfig?.google && authConfig?.devLogin && <div className="divider">or</div>}
+          {configError ? (
+            <div className="auth-state">
+              <div className="notice">Can’t reach the server right now.</div>
+              <p className="hint">
+                If it was just deployed it may be waking up (free hosting sleeps when idle). Give it
+                a few seconds, then retry.
+              </p>
+              <button className="retry" onClick={() => location.reload()}>
+                Retry
+              </button>
+            </div>
+          ) : !authConfig ? (
+            <div className="auth-state">
+              <p className="hint">Connecting to the server…</p>
+            </div>
+          ) : (
+            <>
+              {authConfig.google && <div ref={googleBtn} className="google-btn" />}
+              {authConfig.google && authConfig.devLogin && <div className="divider">or</div>}
 
-          {authConfig?.devLogin && (
-            <form className="dev-login" onSubmit={handleDevLogin}>
-              <label>Continue without an account</label>
-              <input
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="Your name (optional)"
-                disabled={busy}
-              />
-              <button disabled={busy}>{busy ? 'Signing in…' : 'Continue as guest'}</button>
-            </form>
-          )}
+              {authConfig.devLogin && (
+                <form className="dev-login" onSubmit={handleDevLogin}>
+                  <label>Continue without an account</label>
+                  <input
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="Your name (optional)"
+                    disabled={busy}
+                  />
+                  <button disabled={busy}>{busy ? 'Signing in…' : 'Continue as guest'}</button>
+                </form>
+              )}
 
-          {!authConfig?.google && (
-            <p className="hint">Google sign-in turns on automatically once it's configured on the server.</p>
+              {!authConfig.google && !authConfig.devLogin && (
+                <p className="hint">No sign-in method is enabled on the server yet.</p>
+              )}
+              {!authConfig.google && authConfig.devLogin && (
+                <p className="hint">Google sign-in appears here once it’s configured on the server.</p>
+              )}
+              {error && <div className="notice">{error}</div>}
+            </>
           )}
-          {error && <div className="notice">{error}</div>}
         </div>
       </div>
     </div>
