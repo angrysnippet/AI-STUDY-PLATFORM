@@ -16,7 +16,11 @@ import type { Repository } from './repository';
 export class MongoRepository implements Repository {
   async connect(): Promise<void> {
     mongoose.set('strictQuery', true);
-    await mongoose.connect(config.mongodbUri);
+    // Serverless-friendly: small pool, fail fast instead of a 30s hang.
+    await mongoose.connect(config.mongodbUri, {
+      serverSelectionTimeoutMS: 8000,
+      maxPoolSize: 5,
+    });
   }
 
   // ── Users ────────────────────────────────────────────────────────────────────

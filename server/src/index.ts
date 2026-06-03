@@ -1,8 +1,8 @@
 import cors from 'cors';
-import express from 'express';
+import express, { type RequestHandler } from 'express';
 
 import { assertProductionConfig, config, logStubStatus } from './config/env';
-import { initRepository } from './db/repository';
+import { initRepository, whenRepositoryReady } from './db/repository';
 import { requireAuth } from './middleware/auth';
 import { agentRouter } from './routes/agent';
 import { authRouter } from './routes/auth';
@@ -34,18 +34,22 @@ app.use(
   }),
 );
 app.use(express.json({ limit: '1mb' }));
-app.use(async (_req, _res, next) => {
-  await repositoryReady;
+
+// Gate only DB-dependent routes on the Mongo connection. Health and auth
+// config/me don't touch the DB, so they respond instantly even on a cold start
+// (the login screen no longer waits for Mongo to connect).
+const dbReady: RequestHandler = async (_req, _res, next) => {
+  await whenRepositoryReady();
   next();
-});
+};
 
 app.get('/api/health', (_req, res) => {
   res.json({ ok: true, stub: config.stub });
 });
 
 app.use('/api/auth', authRouter);
-app.use('/api/agent', requireAuth, agentRouter);
-app.use('/api/plans', requireAuth, plansRouter);
+app.use('/api/agent', dbReady, requireAuth, agentRouter);
+app.use('/api/plans', dbReady, requireAuth, plansRouter);
 
 async function main() {
   const backend = await repositoryReady;

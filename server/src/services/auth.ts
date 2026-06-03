@@ -4,7 +4,7 @@ import { OAuth2Client } from 'google-auth-library';
 import jwt from 'jsonwebtoken';
 
 import { config } from '../config/env';
-import { repo } from '../db/repository';
+import { repo, whenRepositoryReady } from '../db/repository';
 import { DEV_USER_ID } from '../types';
 import type { AuthUser, User } from '../types';
 
@@ -35,6 +35,7 @@ export function verifyToken(token: string): AuthUser | null {
  * can test multi-user behaviour without Google.
  */
 export async function devLogin(name?: string): Promise<{ token: string; user: User }> {
+  await whenRepositoryReady();
   const trimmed = name?.trim();
   const id = trimmed ? `dev:${slug(trimmed)}` : DEV_USER_ID;
   const user: User = (await repo.getUser(id)) ?? {
@@ -57,6 +58,7 @@ export async function googleLogin(credential: string): Promise<{ token: string; 
   if (config.stub.google) {
     throw new Error('Google sign-in is not configured — use dev login.');
   }
+  await whenRepositoryReady();
   const client = new OAuth2Client(config.googleClientId);
   const ticket = await client.verifyIdToken({
     idToken: credential,

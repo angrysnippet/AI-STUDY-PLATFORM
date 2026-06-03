@@ -127,22 +127,36 @@ class RepositoryProxy implements Repository {
 
 export const repo = new RepositoryProxy();
 
+let readyPromise: Promise<'mongo' | 'memory'> = Promise.resolve('memory');
+
+/** Await the backend being ready — gate only DB-dependent routes on this. */
+export function whenRepositoryReady(): Promise<'mongo' | 'memory'> {
+  return readyPromise;
+}
+
 /**
  * Choose and connect the backend at startup. In-memory unless MONGODB_URI is a
  * real value; if a Mongo connection fails we log and fall back to in-memory so
- * the app still runs (matching the stub-everywhere philosophy).
+ * the app still runs (matching the stub-everywhere philosophy). The returned
+ * promise is cached so requests can await readiness without re-connecting.
  */
-export async function initRepository(): Promise<'mongo' | 'memory'> {
-  if (config.stub.db) return 'memory';
-  try {
-    const { MongoRepository } = await import('./mongoRepository');
-    const mongo = new MongoRepository();
-    await mongo.connect();
-    repo.use(mongo);
-    return 'mongo';
-  } catch (err) {
-    // eslint-disable-next-line no-console
-    console.error('[db] Mongo connection failed, using in-memory store:', err);
-    return 'memory';
+export function initRepository(): Promise<'mongo' | 'memory'> {
+  if (config.stub.db) {
+    readyPromise = Promise.resolve('memory');
+    return readyPromise;
   }
+  readyPromise = (async () => {
+    try {
+      const { MongoRepository } = await import('./mongoRepository');
+      const mongo = new MongoRepository();
+      await mongo.connect();
+      repo.use(mongo);
+      return 'mongo';
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error('[db] Mongo connection failed, using in-memory store:', err);
+      return 'memory';
+    }
+  })();
+  return readyPromise;
 }
