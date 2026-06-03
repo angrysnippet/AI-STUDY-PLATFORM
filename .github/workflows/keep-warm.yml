@@ -1,0 +1,18 @@
+name: keep-warm
+
+# Pings the API health endpoint on a schedule so the (free) serverless function
+# stays warm and visitors don't hit a cold start. /api/health is DB-free and
+# returns instantly, so this is a cheap, safe ping.
+
+on:
+  schedule:
+    - cron: '*/5 * * * *' # every 5 minutes (GitHub may delay under load)
+  workflow_dispatch: {} # allow manual runs from the Actions tab
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping API health
+        run: |
+          curl -fsS --max-time 30 https://ai-study-platform-api.vercel.app/api/health || true
